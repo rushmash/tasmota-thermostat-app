@@ -1,0 +1,20 @@
+<fieldset>
+  <legend>Thermostat parameters</legend>
+  <form action="/cts" method="post" name="thermostat_configuration">
+    <p>
+      <label for="target_temp">Target temperature (°C):</label>
+      <input type="number" name="target_temp" id="target_temp" min="1" max="30" step="0.5" value="%s"/>
+    </p>
+    <p>
+      <label for="hysteresis">Hysteresis (°C):</label>
+      <input type="number" name="hysteresis" id="hysteresis" min="0" max="2" step="0.1" value="%s"/>
+    </p>
+    <p>
+      <label for="control_period">Control period (Minutes):</label>
+      <input type="number" name="control_period" id="control_period" min="1" max="60" step="1" value="%s"/>
+    </p>
+    <p>
+      <button class="button bgrn" type="submit">Save</button>
+    </p>
+  </form>
+</fieldset>
