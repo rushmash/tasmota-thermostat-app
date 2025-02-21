@@ -68,9 +68,9 @@ class Thermostat : Driver
         tasmota.set_timer(self._control_period * 60 * 1000, /-> self.control())
 
         if self._running
-            if self._current_temp > self._target_temp + self._hysteresis
+            if self._current_temp > self._target_temp + 0.5 * self._hysteresis
                 tasmota.set_power(self._heater, false)
-            elif self._current_temp < self._target_temp - self._hysteresis
+            elif self._current_temp < self._target_temp - 0.5 * self._hysteresis
                 tasmota.set_power(self._heater, true)
             end
         end
