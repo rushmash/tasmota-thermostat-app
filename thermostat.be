@@ -1,8 +1,6 @@
 import persist
 import webserver
 
-var export = module('thermostat')
-
 class Thermostat : Driver
     static var _msg_no_temperature  = 'Thermostat: KNX temperature source is lost'
     var _current_temp, _target_temp, _hysteresis # in celsius
@@ -19,11 +17,19 @@ class Thermostat : Driver
         tasmota.add_rule('event#knxrx_val1', /value -> self.temperature_knx_handler(value))
         tasmota.add_rule('rules#timer=1', /-> self.rule_timer1_timeout_handler())
         #tasmota.add_rule('power1#state', /value -> tasmota.cmd('power2 ' .. value))
+
+        tasmota.cmd('RuleTimer1 60', true)
+        tasmota.set_timer(0, /-> self.control(), 'control_timer')
+        tasmota.add_driver(self)
     end
 
-    def start()
-        tasmota.cmd('RuleTimer1 60', true)
-        tasmota.set_timer(0, /-> self.control())
+    def unload()
+        tasmota.remove_rule('event#knxrx_val1')
+        tasmota.remove_rule('rules#timer=1')
+        #tasmota.remove_rule('power1#state')
+        tasmota.remove_timer('control_timer')
+        tasmota.cmd('RuleTimer1 0', true)
+        tasmota.remove_driver(self)
     end
 
     def temperature_knx_handler(value)
@@ -39,8 +45,7 @@ class Thermostat : Driver
     end
 
     def control()
-        # bang-bang
-        tasmota.set_timer(self._control_period * 60 * 1000, /-> self.control())
+        tasmota.set_timer(self._control_period * 60 * 1000, /-> self.control(), 'control_timer')
 
         if !self._running
             return
@@ -126,6 +131,4 @@ class Thermostat : Driver
     end
 end
 
-export.Thermostat = Thermostat
-
-return export
+return Thermostat()

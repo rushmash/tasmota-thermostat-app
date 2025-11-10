@@ -1,11 +1,5 @@
-import sys
-var wd = tasmota.wd
-if size(wd) sys.path().push(wd) end
-
-import thermostat
-
-var t = thermostat.Thermostat()
-tasmota.add_driver(t)
-t.start()
-
-if size(wd) sys.path().pop() end
+do                          # embed in `do` so we don't add anything to global namespace
+    import introspect
+    var thermostat = introspect.module('thermostat', true)    # load module but don't cache
+    tasmota.add_extension(thermostat)
+end
