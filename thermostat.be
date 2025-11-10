@@ -1,49 +1,24 @@
-import string
 import persist
 import webserver
-import json
 
 var export = module('thermostat')
 
-def load_file(fn)
-    var obj, f
-    f = open(tasmota.wd .. fn, 'r')
-    obj = f.read()
-    f.close()
-    return obj
-end
-
 class Thermostat : Driver
-    static var _heater = 0     # tasmota's relay number to which heater is connected
-    static var _msg_no_temperature  = "temperature source is lost"
-
+    static var _msg_no_temperature  = 'Thermostat: KNX temperature source is lost'
     var _current_temp, _target_temp, _hysteresis # in celsius
     var _control_period                          # in minutes
     var _running
 
     def init()
         self._current_temp = 9000.0
-
-        self._target_temp = number(persist.member('target_temp'))
-        if !self._target_temp
-            self._target_temp = 22.5
-        end
-
-        self._hysteresis = number(persist.member('hysteresis'))
-        if !self._hysteresis
-            self._hysteresis = 0.5
-        end
-
-        self._control_period = number(persist.member('control_period'))
-        if !self._control_period
-            self._control_period = 5 # 5 min
-        end
-
+        self._target_temp = number(persist.find('thermostat_target_temp', 22.5))
+        self._hysteresis = number(persist.find('thermostat_hysteresis', 0.5))
+        self._control_period = number(persist.find('thermostat_control_period', 5))
         self._running = false
 
-        tasmota.add_rule("event#knxrx_val1", /value -> self.current_temperature_knx_handler(value))
-        tasmota.add_rule("rules#timer=1", /-> self.rule_timer1_timeout_handler())
-        #tasmota.add_rule("power1#state", /value -> tasmota.cmd(string.format("Power2 %s", str(value))))
+        tasmota.add_rule('event#knxrx_val1', /value -> self.temperature_knx_handler(value))
+        tasmota.add_rule('rules#timer=1', /-> self.rule_timer1_timeout_handler())
+        #tasmota.add_rule('power1#state', /value -> tasmota.cmd('power2 ' .. value))
     end
 
     def start()
@@ -51,7 +26,7 @@ class Thermostat : Driver
         tasmota.set_timer(0, /-> self.control())
     end
 
-    def current_temperature_knx_handler(value)
+    def temperature_knx_handler(value)
         self._running = true
         self._current_temp = number(value)
         tasmota.cmd('RuleTimer1 60', true)
@@ -59,7 +34,7 @@ class Thermostat : Driver
 
     def rule_timer1_timeout_handler()
         self._running = false
-        tasmota.set_power(self._heater, true)
+        tasmota.set_power(0, true)
         tasmota.log(self._msg_no_temperature)
     end
 
@@ -67,80 +42,87 @@ class Thermostat : Driver
         # bang-bang
         tasmota.set_timer(self._control_period * 60 * 1000, /-> self.control())
 
-        if self._running
-            if self._current_temp > self._target_temp + 0.5 * self._hysteresis
-                tasmota.set_power(self._heater, false)
-            elif self._current_temp < self._target_temp - 0.5 * self._hysteresis
-                tasmota.set_power(self._heater, true)
-            end
+        if !self._running
+            return
+        end
+
+        if self._current_temp > self._target_temp + 0.5 * self._hysteresis
+            tasmota.set_power(0, false)
+        elif self._current_temp < self._target_temp - 0.5 * self._hysteresis
+            tasmota.set_power(0, true)
         end
     end
 
     def json_append()
         tasmota.response_append(
-            string.format(
-                ",\"current_temperature\": %.1f"..
-                ",\"target_temperature\": %.1f"..
-                ",\"hysteresis\": %.1f"..
-                ",\"control_period\": %d",
-                self._current_temp, self._target_temp, self._hysteresis, self._control_period))
+            ',"Thermostat":{'..
+                f'"current_temperature":{self._current_temp:.1f},'..
+                f'"target_temperature":{self._target_temp:.1f},'..
+                f'"hysteresis":{self._hysteresis:.1f},'..
+                f'"control_period":{self._control_period:d}'..
+            '}')
     end
 
     def web_add_main_button()
-        webserver.content_send("<form method=\"get\" action=\"cts\"><button>Configure Thermostat</button></form>")
+        webserver.content_send('<form method="get" action="thermostat_settings"><button>Thermostat Settings</button></form>')
     end
 
     def web_add_handler()
-        webserver.on('/cts', /-> self.configure_thermostat_http_get(), webserver.HTTP_GET)
-        webserver.on('/cts', /-> self.configure_thermostat_http_post(), webserver.HTTP_POST)
+        webserver.on('/thermostat_settings', /-> self.thermostat_settings_http_get(), webserver.HTTP_GET)
+        webserver.on('/thermostat_settings', /-> self.thermostat_settings_http_post(), webserver.HTTP_POST)
     end
 
     def web_sensor()
         if !self._running
-            tasmota.web_send("Thermostat is not running")
+            tasmota.web_send(self._msg_no_temperature)
             return
         end
 
         tasmota.web_send_decimal(
-            string.format(
-                "{s}Current temperature: {m}%.1f °C{e}"..
-                "{s}Target temperature: {m}%.1f °C{e}"..
-                "{s}Hysteresis: {m}%.1f °C{e}"..
-                "{s}Control period: {m}%d min{e}",
-                self._current_temp, self._target_temp, self._hysteresis, self._control_period))
+            '{s}Current temperature: {m}'..f'{self._current_temp:.1f} °C'..'{e}'..
+            '{s}Target temperature: {m}'..f'{self._target_temp:.1f} °C'..'{e}'..
+            '{s}Hysteresis: {m}'..f'{self._hysteresis:.1f} °C'..'{e}'..
+            '{s}Control period: {m}'..f'{self._control_period:d} min'..'{e}')
     end
 
-    def configure_thermostat_http_get()
-        webserver.content_start('Configure Thermostat')
+    def thermostat_settings_http_get()
+        webserver.content_start('Thermostat Settings')
         webserver.content_send_style()
-
-        var content = load_file('configure_template.html')
-        webserver.content_send(string.format(content, self._target_temp, self._hysteresis, self._control_period))
+        webserver.content_send(
+            '<fieldset>'..
+                '<legend>Thermostat settings</legend>'..
+                '<form action="/thermostat_settings" method="post" name="thermostat_settings">'..
+                    '<p>'..
+                        '<label for="target_temp">Target temperature (°C):</label>'..
+                        f'<input type="number" name="target_temp" id="target_temp" min="1" max="30" step="0.5" value="{self._target_temp:.1f}"/>'..
+                    '</p><p>'..
+                        '<label for="hysteresis">Hysteresis (°C):</label>'..
+                        f'<input type="number" name="hysteresis" id="hysteresis" min="0" max="2" step="0.1" value="{self._hysteresis:.1f}"/>'..
+                    '</p><p>'..
+                        '<label for="control_period">Control period (Minutes):</label>'..
+                        f'<input type="number" name="control_period" id="control_period" min="1" max="60" step="1" value="{self._control_period:d}"/>'..
+                    '</p><p>'..
+                        '<button class="button bgrn" type="submit">Save</button>'..
+                    '</p>'..
+                '</form>'..
+            '</fieldset>')
         webserver.content_button(webserver.BUTTON_MAIN)
         webserver.content_stop()
     end
 
-    def configure_thermostat_http_post()
-        if webserver.has_arg('target_temp')
-            var value = webserver.arg('target_temp')
-            persist.setmember('target_temp', value)
-            self._target_temp = number(value)
-        end
+    def thermostat_settings_http_post()
+        import introspect
 
-        if webserver.has_arg('hysteresis')
-            var value = webserver.arg('hysteresis')
-            persist.setmember('hysteresis', value)
-            self._hysteresis = number(value)
-        end
+        for i: 0..webserver.arg_size()-1
+            var name = webserver.arg_name(i)
+            var value = webserver.arg(i)
 
-        if webserver.has_arg('control_period')
-            var value = webserver.arg('control_period')
-            persist.setmember('control_period', value)
-            self._control_period = number(value)
+            persist.setmember('thermostat_'..name, value)
+            introspect.set(self, '_'..name, number(value))
         end
 
         persist.save()
-        webserver.redirect("/")
+        webserver.redirect('/')
     end
 end
 
