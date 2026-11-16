@@ -1,7 +1,7 @@
 {
-  "name": "Wireless on/off thermostat with webUI",
-  "version": "0x190B0800",
-  "description": "Controls the home boiler on Power1 using room temperature data supplied remotely via KNX to the RX1 slot at least twice per minute.",
+  "name": "Wireless Thermostat (web control)",
+  "version": "0x1A0B1200",
+  "description": "Controls your home boiler on Power1 (on/off) based on room temperature readings received every 30 seconds via your KNX network (RX1).",
   "author": "github.com/rushmash/tasmota-thermostat-app",
   "min_tasmota": "0x0F000100",
   "features": ""
