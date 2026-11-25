@@ -423,4 +423,6 @@ class Thermostat : Driver
     end
 end
 
-return Thermostat()
+var thermostat = module("thermostat")
+thermostat.Thermostat = Thermostat
+return thermostat
