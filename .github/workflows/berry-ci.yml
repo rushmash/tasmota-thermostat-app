@@ -1,0 +1,31 @@
+name: Berry Script CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-berry:
+    runs-on: ubuntu-slim
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get install -y libreadline-dev
+
+      - name: Build latest Berry interpreter
+        run: |
+          git clone --depth 1 https://github.com/berry-lang/berry.git /tmp/berry
+          make -C /tmp/berry
+
+      - name: Run Berry tests
+        run: |
+          for file in tests/test_*.be; do
+            echo "Running $file..."
+            /tmp/berry/berry "$file"
+          done
