@@ -69,6 +69,7 @@ class Thermostat : Driver
     def on_knx_temperature(value_str)
         self._running = true
         self._current_temp = number(value_str)
+        tasmota.remove_timer(self.WATCHDOG_TIMER_ID)
         tasmota.set_timer(self.WATCHDOG_TIMEOUT_MS, /-> self.on_watchdog_timeout(), self.WATCHDOG_TIMER_ID)
     end
 
@@ -85,8 +86,9 @@ class Thermostat : Driver
             return
         end
 
+        var now_local = tasmota.rtc('local')
+        self._target_temp = self.apply_schedule_override(now_local)
         var now_epoch = tasmota.rtc('utc')
-        self._target_temp = self.apply_schedule_override(now_epoch)
         self._target_temp = self.apply_temporary_override(self._target_temp, now_epoch)
         self._target_temp = self.apply_safety_override(self._target_temp)
 
@@ -98,8 +100,8 @@ class Thermostat : Driver
         end
     end
 
-    def apply_schedule_override(time_epoch)
-        var dump = tasmota.time_dump(time_epoch)
+    def apply_schedule_override(time_local)
+        var dump = tasmota.time_dump(time_local)
         var mins = (dump['weekday'] * 24 + dump['hour']) * 60 + dump['min']
 
         var i = size(self._weekly_rules) - 1
@@ -115,13 +117,13 @@ class Thermostat : Driver
         end
 
         if size(self._weekly_rules) >= 1
-            var preset_id = size(self._weekly_rules) - 1
+            var preset_id = self._weekly_rules[-1][1]
             self._current_preset = preset_id
             return number(self._presets[preset_id][1])
         end
         
         self._current_preset = 0
-        return self._presets[0][1]
+        return number(self._presets[0][1])
     end
 
     def apply_temporary_override(temp, time_epoch)
